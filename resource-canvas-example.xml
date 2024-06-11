@@ -1,0 +1,273 @@
+<resource xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3" xmlns:c="http://midpoint.evolveum.com/xml/ns/public/common/common-3" xmlns:icfs="http://midpoint.evolveum.com/xml/ns/public/connector/icf-1/resource-schema-3" xmlns:org="http://midpoint.evolveum.com/xml/ns/public/common/org-3" xmlns:q="http://prism.evolveum.com/xml/ns/public/query-3" xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3" xmlns:t="http://prism.evolveum.com/xml/ns/public/types-3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" oid="e2c6010d-1697-41db-ae28-9f05f78e1df0" version="132">
+    <name>Canvas Learning</name>
+    <lifecycleState>active</lifecycleState>
+    <connectorRef xmlns:tns="http://midpoint.evolveum.com/xml/ns/public/common/common-3" type="tns:ConnectorType">
+        <filter>
+            <q:text>gen971:connectorType = 'com.evolveum.polygon.connector.canvas.CanvasConnector' and gen971:connectorVersion = '1.0' and gen971:available = true</q:text>
+        </filter>
+    </connectorRef>
+    <connectorConfiguration xmlns:icfc="http://midpoint.evolveum.com/xml/ns/public/connector/icf-1/connector-schema-3">
+        <icfc:configurationProperties xmlns:cfg="http://midpoint.evolveum.com/xml/ns/public/connector/icf-1/bundle/com.evolveum.polygon.connector-canvas-lms/com.evolveum.polygon.connector.canvas.CanvasConnector">
+            <cfg:baseUrl>https://learning.k8s.evolveum.com</cfg:baseUrl>
+            <cfg:authToken>
+                <t:encryptedData>
+                <!-- omitted -->
+                </t:encryptedData>
+            </cfg:authToken>
+            <cfg:accountId>1</cfg:accountId>
+            <cfg:studentRoleId>11</cfg:studentRoleId>
+            <cfg:teacherRoleId>12</cfg:teacherRoleId>
+            <cfg:courseIdsOnUsers>true</cfg:courseIdsOnUsers>
+        </icfc:configurationProperties>
+    </connectorConfiguration>
+    <schema>
+        <generationConstraints>
+            <generateObjectClass>ri:AccountObjectClass</generateObjectClass>
+            <generateObjectClass>ri:GroupObjectClass</generateObjectClass>
+        </generationConstraints>
+    </schema>
+    <schemaHandling>
+        <objectType id="5">
+            <kind>account</kind>
+            <intent>default</intent>
+            <displayName>User</displayName>
+            <default>true</default>
+            <delineation>
+                <objectClass>ri:AccountObjectClass</objectClass>
+            </delineation>
+            <focus>
+                <type>c:UserType</type>
+            </focus>
+            <attribute id="39">
+                <ref>ri:email</ref>
+                <outbound>
+                    <strength>strong</strength>
+                    <source>
+                        <path>$focus/emailAddress</path>
+                    </source>
+                </outbound>
+                <inbound id="52">
+                    <strength>strong</strength>
+                    <target>
+                        <path>emailAddress</path>
+                    </target>
+                </inbound>
+            </attribute>
+            <attribute id="66">
+                <ref>ri:authentication_provider_id</ref>
+                <fetchStrategy>explicit</fetchStrategy>
+                <outbound>
+                    <strength>strong</strength>
+                    <expression>
+                        <value>3</value>
+                    </expression>
+                </outbound>
+            </attribute>
+            <attribute id="94">
+                <ref>icfs:name</ref>
+                <outbound>
+                    <strength>strong</strength>
+                    <source>
+                        <path>$focus/name</path>
+                    </source>
+                </outbound>
+                <inbound id="99">
+                    <strength>strong</strength>
+                    <target>
+                        <path>name</path>
+                    </target>
+                </inbound>
+            </attribute>
+            <attribute id="96">
+                <ref>ri:full_name</ref>
+                <outbound>
+                    <strength>strong</strength>
+                    <source>
+                        <path>$focus/fullName</path>
+                    </source>
+                </outbound>
+                <inbound id="100">
+                    <strength>strong</strength>
+                    <target>
+                        <path>fullName</path>
+                    </target>
+                </inbound>
+            </attribute>
+            <attribute id="82">
+                <ref>ri:student_course_ids</ref>
+                <fetchStrategy>explicit</fetchStrategy>
+            </attribute>
+            <attribute id="83">
+                <ref>ri:teacher_course_ids</ref>
+                <fetchStrategy>explicit</fetchStrategy>
+            </attribute>
+            <association id="89">
+                <ref>ri:teacherCourseIds</ref>
+                <displayName>Teacher Course IDs</displayName>
+                <kind>entitlement</kind>
+                <intent>default</intent>
+                <direction>subjectToObject</direction>
+                <associationAttribute>ri:teacher_course_ids</associationAttribute>
+                <valueAttribute>icfs:uid</valueAttribute>
+            </association>
+            <association id="64">
+                <ref>ri:studentCourseIds</ref>
+                <displayName>Student Course IDs</displayName>
+                <kind>entitlement</kind>
+                <intent>default</intent>
+                <direction>subjectToObject</direction>
+                <associationAttribute>ri:student_course_ids</associationAttribute>
+                <valueAttribute>icfs:uid</valueAttribute>
+                <!--
+                Or with objectToSubject, but shortcut attributes MUST be used for proper function:
+                <ref>ri:studentCourseIds</ref>
+                <displayName>Student Course IDs</displayName>
+                <kind>entitlement</kind>
+                <intent>default</intent>
+                <direction>objectToSubject</direction>
+                <associationAttribute>ri:student_ids</associationAttribute>
+                <valueAttribute>icfs:uid</valueAttribute>
+                <shortcutAssociationAttribute>ri:student_course_ids</shortcutAssociationAttribute>
+                <shortcutValueAttribute>icfs:uid</shortcutValueAttribute>
+                <explicitReferentialIntegrity>false</explicitReferentialIntegrity>
+                -->
+            </association>
+            <activation>
+                <administrativeStatus>
+                    <outbound id="102">
+                        <expression>
+                            <asIs/>
+                        </expression>
+                    </outbound>
+                </administrativeStatus>
+                <disableInsteadOfDelete>
+                    <lifecycleState>active</lifecycleState>
+                </disableInsteadOfDelete>
+            </activation>
+            <correlation>
+                <correlators>
+                    <items id="58">
+                        <name>mail</name>
+                        <enabled>true</enabled>
+                        <item id="59">
+                            <ref>emailAddress</ref>
+                        </item>
+                    </items>
+                </correlators>
+            </correlation>
+            <synchronization>
+                <reaction id="43">
+                    <situation>deleted</situation>
+                    <actions>
+                        <unlink id="47"/>
+                    </actions>
+                </reaction>
+                <reaction id="44">
+                    <situation>unmatched</situation>
+                    <actions>
+                        <addFocus id="48"/>
+                    </actions>
+                </reaction>
+                <reaction id="45">
+                    <situation>unlinked</situation>
+                    <actions>
+                        <link id="49"/>
+                    </actions>
+                </reaction>
+                <reaction id="46">
+                    <situation>linked</situation>
+                    <actions>
+                        <synchronize id="50"/>
+                    </actions>
+                </reaction>
+            </synchronization>
+        </objectType>
+        <objectType id="7">
+            <kind>entitlement</kind>
+            <intent>default</intent>
+            <displayName>Course</displayName>
+            <default>true</default>
+            <delineation>
+                <objectClass>ri:GroupObjectClass</objectClass>
+            </delineation>
+            <focus>
+                <type>c:ServiceType</type>
+            </focus>
+            <attribute id="75">
+                <ref>icfs:uid</ref>
+                <inbound id="76">
+                    <strength>strong</strength>
+                    <target>
+                        <path>identifier</path>
+                    </target>
+                </inbound>
+            </attribute>
+            <attribute id="117">
+                <ref>icfs:name</ref>
+                <!-- Name is not unique, so we need to disable this as a secondary identifier. -->
+                <secondaryIdentifier>false</secondaryIdentifier>
+                <inbound id="114">
+                    <!--
+                    Because the name is not unique, we combine it with primary identifier (icfs:uid,
+                    which is REST id) so we can use it for midPoint unique Service name.
+                    -->
+                    <strength>strong</strength>
+                    <expression>
+                        <script>
+                            <code>projection?.primaryIdentifierValue + ' ' + input</code>
+                        </script>
+                    </expression>
+                    <target>
+                        <path>name</path>
+                    </target>
+                </inbound>
+                <inbound id="118">
+                    <strength>strong</strength>
+                    <target>
+                        <path>displayName</path>
+                    </target>
+                </inbound>
+            </attribute>
+            <correlation>
+                <correlators>
+                    <items id="25">
+                        <name>Canvas ID</name>
+                        <enabled>true</enabled>
+                        <item id="26">
+                            <ref>identifier</ref>
+                        </item>
+                    </items>
+                </correlators>
+            </correlation>
+            <synchronization>
+                <reaction id="32">
+                    <situation>unmatched</situation>
+                    <actions>
+                        <addFocus id="35"/>
+                    </actions>
+                </reaction>
+                <reaction id="33">
+                    <situation>unlinked</situation>
+                    <actions>
+                        <link id="36"/>
+                    </actions>
+                </reaction>
+                <reaction id="34">
+                    <situation>deleted</situation>
+                    <actions>
+                        <unlink id="37"/>
+                    </actions>
+                </reaction>
+            </synchronization>
+        </objectType>
+    </schemaHandling>
+    <capabilities>
+        <configured xmlns:cap="http://midpoint.evolveum.com/xml/ns/public/resource/capabilities-3">
+            <cap:activation>
+                <cap:status>
+                    <cap:enabled>true</cap:enabled>
+                </cap:status>
+            </cap:activation>
+        </configured>
+    </capabilities>
+</resource>

@@ -1,0 +1,387 @@
+= Canvas LMS Connector
+
+ConnId connector for Canvas LMS.
+
+[IMPORTANT]
+In this document, the terms "user" and "course" are used in the Canvas sense mostly.
+Canvas "user" is a midPoint "account" and Canvas "course" is a "group" or "entitlement".
+
+== Limitations
+
+This connector uses https://canvas.instructure.com/doc/api/[Canvas LMS REST API].
+
+* Single Canvas account ID is supported (configurable).
+* Listing of objects does not support filtering/search of users/courses.
+Connector does not emulate filtering either.
+** Equals filter with `__UID__` (API property `id`) and `__NAME__` (user login, property `login_id`) is supported - this is utilized by `getObject`.
+** Pagination is supported - this uses the default ordering by `sortable_name` property.
+* You can manage Canvas users (ACCOUNT) - create, update (including disable/enable), delete.
+* Courses (GROUPS) are not managed (not creatable/deletable), only their enrollments can be updated.
+* You can enrol a user to a course (GROUP) with the student or the teacher role (`objectToSubject` style).
+You have to use `shortcut*Attribute` elements for this to work properly.
+* Can enrol to a course on the user (ACCOUNT) object (`subjectToObject` style) - this is likely more performant.
+* Role IDs for student and teacher are configurable, so custom course-level roles can be used.
+* When users are un-enrolled, the enrollment is "concluded" (state `completed`).
+If the user is re-enrolled with the same course role, the enrollment is reused and set as `active`.
+This should preserve any previous grades.
+* Enrollments with other than the two configured role (student/teacher) are ignored by the connector.
+By design, these will not be touched, e.g. accidentally deleted.
+* Activation status (disable/enable) is supported, set capabilities to use it - see the link:resource-canvas-example.xml[example].
+This preserves the user's enrollments and grades.
+* No live-sync support.
+* No enrollment terms support.
+
+In theory, users could be listed without the additional info (login related info and enrollments), however,
+midPoint still needs all the attributes for processing and `fetchStrategy=explicit` would likely be configured for these non-default attributes.
+So instead of complicating the configuration, *enrollments and login info is read for each user*.
+This means that besides the list REST call itself, two additional REST calls are executed for each user object.
+Even with pagination support, reading a page of users may take a few seconds - so be patient.
+
+The same goes for the courses, but there is likely less of those, so importing all courses should be faster than importing all users.
+
+== Returned attributes
+
+For a user (ACCOUNT), the following attributes are returned:
+
+|===
+| Attribute | Type | Notes
+
+| `+__UID__+` (icfs:uid) | String | Contains user's `id` from REST API (read-only)
+| `+__NAME__+` (icfs:name) | String | REST property `login_id` (sometimes under key `unique_id`), login attribute, can be changed
+| `full_name` | String | REST property `name` (renamed, to avoid confusion with ConnID name attribute)
+| `created_at` | String | Date and time in ISO format, e.g. `2024-06-05T03:58:46-06:00` (read-only)
+| `email` | String |
+| `short_name` | String |
+| `sortable_name` | String |
+| `authentication_provider_id` | Integer | ID of authentication provider for the login (login attribute)
+| `+__ENABLED__+` | Boolean | Mapped to `login/workflow_state`, values `active`/`suspended`
+| `+__PASSWORD__+` | GuardedString | Mapped to `login/password` (write-only)
+| `student_course_ids` | multi-value String | IDs of courses, where the user is enrolled as a student
+| `teacher_course_ids` | multi-value String | IDs of courses, where the user is enrolled as a teacher
+|===
+
+For the meaning of the user attributes, look at https://canvas.instructure.com/doc/api/users.html[this page].
+Login details are described https://canvas.instructure.com/doc/api/logins.html[here].
+The last two attributes are populated with an additional call to https://canvas.instructure.com/doc/api/enrollments.html#method.enrollments_api.index[user's enrollments].
+
+For a course (GROUP), the following attributes are returned:
+
+|===
+| Attribute | Type | Notes
+
+| `+__UID__+` (icfs:uid) | String | Contains course `id` from REST API
+| `+__NAME__+` (icfs:name) | String | REST property `name`, note that *this is not unique*, if used as midPoint name, combine it with the UID
+| `course_code` | String | Not unique either
+| `uuid` | String | Opaque generated string - but unique, yes!
+| `start_at` | String | ISO date
+| `end_at` | String | ISO date
+| `is_public` | Boolean |
+| `is_public_to_auth_users` | Boolean |
+| `student_ids` | multi-value String | IDs of users enrolled as a student
+| `teacher_ids` | multi-value String | IDs of users enrolled as a teacher
+|===
+
+For the meaning of the course attributes, look at https://canvas.instructure.com/doc/api/courses.html[this page].
+The last two attributes are populated with an additional call to https://canvas.instructure.com/doc/api/enrollments.html#method.enrollments_api.index[course enrollments].
+
+[IMPORTANT]
+====
+User (ACCOUNT) name attribute is unique, however name of the course (GROUP) is not.
+MidPoint by default expects that `icfs:name` is a secondary identifier, hence unique, but ConnId contract for `Name` does not require this.
+Human-readable name is better than the opaque `uuid` property, even when not unique.
+
+But we have to instruct midPoint about this.
+To do so, add `secondaryIdentifier=false` under the `attribute` for the `icfs:name` for the entitlement:
+
+[source,xml]
+----
+<objectType>
+    <kind>entitlement</kind>
+...
+    <delineation>
+        <objectClass>ri:GroupObjectClass</objectClass>
+    </delineation>
+...
+    <attribute id="117">
+        <ref>icfs:name</ref>
+        <!-- Name is not unique, so we need to disable this as a secondary identifier. -->
+        <secondaryIdentifier>false</secondaryIdentifier>
+...
+----
+
+Avoid configuration under `schema` because that block is re-generated when the schema is refreshed.
+====
+
+== Association examples
+
+In Canvas, the relation between a user and a course is represented by "enrollment".
+These can be obtained either for the user, or for the course - it doesn't really matter.
+On the connector, this is reflected by two sets of IDs on both types of objects:
+
+* On the user object (objectClass `ACCOUNT`) there are `student_course_ids` and `teacher_course_ids` properties
+which contain the course IDs (UID on the connector object) where the user acts as a student or a teacher.
+Both properties can be updated (this works for association with `subjectToObject` direction).
+This is the preferred solution for this connector.
+* On the course object (objectClass `GROUP`) there are `student_ids` and `teacher_ids` properties
+which contain the user IDs (UID on the connector object).
+Both properties can be updated (this works for association with `objectToSubject` direction).
+
+Traditional object-to-subject association is defined on the `account` kind like this:
+
+[source,xml]
+----
+<association>
+    <ref>ri:studentCourseIds</ref>
+    <displayName>Student Course IDs</displayName>
+    <kind>entitlement</kind>
+    <intent>default</intent>
+    <direction>objectToSubject</direction>
+    <associationAttribute>ri:student_ids</associationAttribute>
+    <valueAttribute>icfs:uid</valueAttribute>
+    <shortcutAssociationAttribute>ri:student_course_ids</shortcutAssociationAttribute>
+    <shortcutValueAttribute>icfs:uid</shortcutValueAttribute>
+    <explicitReferentialIntegrity>false</explicitReferentialIntegrity>
+</association>
+----
+
+[IMPORTANT]
+This association *DOES NOT work without the `shortcut*Attribute` elements*, so better use them.
+The reason is that this scenario requires filter support which is not provided by this connector.
+
+Using subject-to-object is more straightforward (shown here for both course-level roles):
+
+[source,xml]
+----
+<association>
+    <ref>ri:teacherCourseIds</ref>
+    <displayName>Teacher Course IDs</displayName>
+    <kind>entitlement</kind>
+    <intent>default</intent>
+    <direction>subjectToObject</direction>
+    <associationAttribute>ri:teacher_course_ids</associationAttribute>
+    <valueAttribute>icfs:uid</valueAttribute>
+</association>
+<association>
+    <ref>ri:studentCourseIds</ref>
+    <displayName>Student Course IDs</displayName>
+    <kind>entitlement</kind>
+    <intent>default</intent>
+    <direction>subjectToObject</direction>
+    <associationAttribute>ri:student_course_ids</associationAttribute>
+    <valueAttribute>icfs:uid</valueAttribute>
+</association>
+----
+
+== REST API examples
+
+Examples of REST API calls follow - some are used by the connector, some are just for exploration.
+
+A few notes:
+
+* User is created on the account - this creates "login" for that account.
+* Some info is on the login (e.g. login as `unique_id`), some on the user.
+There is `login_id` visible on the user object, but only for users with login
+(not sure what happens for users with different ``unique_id``s on different accounts/logins).
+* Connector doesn't manage multiple logins - only one login on the configured account is managed.
+* User can be deleted from the account - remnant user without logins will remain, but this is not reused by the connector later.
+
+[source,bash]
+----
+BASE_URL=https://my-canvas.example.com
+TOKEN=<auth-token-here>
+
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/users/self" # my account
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/accounts/1/users" # 1 for evolveum, 2 is Site Admin, also "self" can be used
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/accounts/1/users?include[]=email"
+# To show also deleted users:
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/accounts/1/users?include[]=email&include_deleted_users=true"
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/users/3" # detail
+# Search by "search term" - can be used to search by a few fields (name, email), but login is not among them.
+# That's why this is NOT used in the connector in the end.
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/accounts/1/users?search_term=test3"
+
+# roles, needed for specifying student/teacher role ID in the resource config (also used in enrollments below):
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/accounts/1/roles" | jq 'map({id: .id, label: .label})'
+
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/accounts/1/courses"
+# Note that enrollments can be listed on courses, users and sections, but not on the account.
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/courses/1/enrollments"
+# possible filters: jq '[.[] | {id: .id, user_id: .user.id, user_name: .user.name, role_id: .role_id, state: .enrollment_state}]'
+# lists enrollments in all states, handy to figure out that enrollment can be reused for a user
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/courses/2/enrollments?state[]=active&state[]=invited&state[]=creation_pending&state[]=deleted&state[]=rejected&state[]=completed&state[]=inactive" |
+  jq 'map({id: .id, user_id: .user.id, user_name: .user.name, role_id: .role_id, state: .enrollment_state})'
+# or the same with map: jq 'map({ ...attrs as above... })'
+# Enrollment detail must be obtained on the account:
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/accounts/1/enrollments/1"
+
+# CREATE/DELETE enrollment
+# -F 'enrollment[type]=StudentEnrollment' good only for built-in course roles, here 25 is User role ID
+# default enrollment_state is 'invited', but it can be set explicitly to active
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/courses/1/enrollments" \
+  -X POST -F 'enrollment[user_id]=1' -F 'enrollment[role_id]=25' -F 'enrollment[enrollment_state]=active'
+# 84 is existing enrollment id, task can be: conclude (default), delete, inactivate, deactivate (the last two mean the same)
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/courses/1/enrollments/84" -X DELETE -F 'task=conclude'
+
+# Fixing admin missing on the account (after accidental deletion from account 1)
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/accounts/1/admins" \
+  -X POST -F 'user_id=1'
+
+User example:
+{
+  "id": 149,
+  "name": "Yyy Xxx",
+  "created_at": "2023-10-31T11:19:01-06:00",
+  "sortable_name": "Xxx, Yyy",
+  "short_name": "Yyy Xxx",
+  "sis_user_id": null,
+  "integration_id": null,
+  "sis_import_id": null,
+  "login_id": "Yyy Xxx",
+  "last_name": "Xxx",
+  "first_name": "Yyy",
+  "email": "xxx@example.com",
+  "locale": null,
+  "permissions": {
+    "can_update_name": true,
+    "can_update_avatar": false,
+    "limit_parent_app_web_access": false
+  }
+}
+
+
+# Create user (connector will not use all the shown properties):
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/accounts/1/users" \
+  -X POST -H "Content-Type: application/json" --data @- <<'EOF'
+{
+  "user": {
+    "name": "User Test3",
+    "time_zone": "Europe/Bratislava",
+    "locale": "sk",
+    "skip_registration": true,
+    "send_confirmation": true,
+    "sortable_name": "Test3, User"
+  },
+  "communication_channel": {
+    "type": "mail",
+    "address": "test3@example.com"
+  },
+  "pseudonym": {
+    "unique_id": "test3"
+  }
+}
+EOF
+# returns ID, e.g. 222
+
+# Update (patch) user:
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/users/222" \
+  -X PUT -H "Content-Type: application/json" --data @- <<'EOF'
+{
+  "user": {
+    "first_name": "Test1"
+  }
+}
+EOF
+# returns 401 Unauthorized: user not authorized to perform that action - is it because Profile is disabled?
+# Possibly, first_name is just derived attribute...
+# This works fine:
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/users/222" \
+  -X PUT -H "Content-Type: application/json" --data @- <<'EOF'
+{
+  "user": {
+    "email": "test1@example.com"
+  }
+}
+EOF
+
+# Delete user - not sure what this does, not documented on: https://canvas.instructure.com/doc/api/users.html
+curl -X DELETE -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/users/222"
+{
+  "deleted": true,
+  "status": "ok"
+}
+
+
+# Deleting user from single account - this is probably better, although with just one account it is the same thing.
+curl -X DELETE -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/accounts/1/users/222"
+# DELETE RESPONSE - ironically probably the most complete user:
+{
+  "user": {
+    "id": 30,
+    "name": "test1",
+    "sortable_name": "test1",
+    "workflow_state": "pre_registered",
+    "time_zone": null,
+    "created_at": "2024-05-17T01:19:16-06:00",
+    "updated_at": "2024-05-17T01:19:16-06:00",
+    "avatar_image_url": null,
+    "avatar_image_source": null,
+    "avatar_image_updated_at": null,
+    "school_name": null,
+    "school_position": null,
+    "short_name": "test1",
+    "deleted_at": null,
+    "show_user_services": true,
+    "page_views_count": 0,
+    "reminder_time_for_due_dates": 172800,
+    "reminder_time_for_grading": 0,
+    "storage_quota": null,
+    "visible_inbox_types": null,
+    "last_user_note": null,
+    "subscribe_to_emails": null,
+    "preferences": {},
+    "avatar_state": "none",
+    "locale": null,
+    "browser_locale": null,
+    "unread_conversations_count": 0,
+    "stuck_sis_fields": [
+      "name",
+      "sortable_name"
+    ],
+    "public": null,
+    "initial_enrollment_type": null,
+    "crocodoc_id": null,
+    "last_logged_out": null,
+    "lti_context_id": null,
+    "turnitin_id": null,
+    "lti_id": "fa4c0de6-5636-405a-b939-ff63fbb4c7fb",
+    "pronouns": null,
+    "root_account_ids": [
+      1
+    ],
+    "merged_into_user_id": null
+  }
+}
+
+# How to see that user is deleted? Wrong question.
+# How to see that user is deleted on some account? There is no login for it in this (notice account_id):
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/users/30/logins"
+[
+  {
+    "id": 26,
+    "user_id": 30,
+    "account_id": 1,
+    "workflow_state": "active",
+    "unique_id": "test1",
+    "created_at": "2024-05-17T07:19:16Z",
+    "sis_user_id": null,
+    "integration_id": null,
+    "authentication_provider_id": null,
+    "declared_user_type": null
+  }
+]
+# If the user is deleted from all accounts, the response is [].
+
+# This does NOT show user logins on account - it does something, but is not documented on:
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/accounts/1/logins"
+[]
+
+# Change of user login - you have to know login.id first (e.g. 26 in the example above):
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/accounts/1/logins/249" \
+-X PUT -H "Content-Type: application/json" --data @- <<'EOF'
+{
+  "login": {
+    "unique_id": "test48"
+  }
+}
+EOF
+----
