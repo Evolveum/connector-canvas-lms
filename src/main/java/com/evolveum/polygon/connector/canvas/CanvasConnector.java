@@ -775,11 +775,11 @@ public class CanvasConnector implements Connector, TestOp, SchemaOp, SearchOp<Ca
                 }
                 if (attr.getName().equals(STUDENT_COURSE_IDS)) {
                     assert courseEnrollments != null;
-                    deleteEnrollments(courseEnrollments.studentEnrollments, attr.getValue());
+                    deleteEnrollmentsFromUser(courseEnrollments.studentEnrollments, attr.getValue());
                 }
                 if (attr.getName().equals(TEACHER_COURSE_IDS)) {
                     assert courseEnrollments != null;
-                    deleteEnrollments(courseEnrollments.teacherEnrollments, attr.getValue());
+                    deleteEnrollmentsFromUser(courseEnrollments.teacherEnrollments, attr.getValue());
                 }
             }
         }
@@ -806,7 +806,7 @@ public class CanvasConnector implements Connector, TestOp, SchemaOp, SearchOp<Ca
 
         Set<String> activeCourseIds = existingEnrollments.stream()
                 .filter(e -> e.state.equals(CREATED_ENROLLMENT_STATE))
-                .map(e -> e.userIdString())
+                .map(e -> e.courseIdString())
                 .collect(Collectors.toSet());
 
         newCourseIds.stream()
@@ -939,10 +939,10 @@ public class CanvasConnector implements Connector, TestOp, SchemaOp, SearchOp<Ca
             courseEnrollments = courseEnrollments != null ? courseEnrollments : fetchCourseEnrollments(courseId);
             for (Attribute attr : attrsToRemove) {
                 if (attr.getName().equals(STUDENT_IDS)) {
-                    deleteEnrollments(courseEnrollments.studentEnrollments, attr.getValue());
+                    deleteEnrollmentsFromCourse(courseEnrollments.studentEnrollments, attr.getValue());
                 }
                 if (attr.getName().equals(TEACHER_IDS)) {
-                    deleteEnrollments(courseEnrollments.teacherEnrollments, attr.getValue());
+                    deleteEnrollmentsFromCourse(courseEnrollments.teacherEnrollments, attr.getValue());
                 }
             }
         }
@@ -990,10 +990,18 @@ public class CanvasConnector implements Connector, TestOp, SchemaOp, SearchOp<Ca
         canvasClient.postJson(API_COURSES_DETAILS + courseId + "/enrollments", json.toString());
     }
 
-    private void deleteEnrollments(List<CourseEnrollment> existingEnrollments, List<Object> userIdsToDelete) {
-        Set<Object> userIdsToDeleteSet = new HashSet<>(userIdsToDelete);
+    private void deleteEnrollmentsFromCourse(List<CourseEnrollment> existingEnrollments, List<Object> userIdsToDelete) {
+        Set<Object> idsToDeleteSet = new HashSet<>(userIdsToDelete);
         existingEnrollments.stream()
-                .filter(e -> userIdsToDeleteSet.contains(e.userIdString())) // it's a string here!
+                .filter(e -> idsToDeleteSet.contains(e.userIdString())) // it's a string here!
+                .filter(e -> !e.isInactiveState())
+                .forEach(e -> deleteEnrollment(e));
+    }
+
+    private void deleteEnrollmentsFromUser(List<CourseEnrollment> existingEnrollments, List<Object> courseIdsToDelete) {
+        Set<Object> idsToDeleteSet = new HashSet<>(courseIdsToDelete);
+        existingEnrollments.stream()
+                .filter(e -> idsToDeleteSet.contains(e.courseIdString())) // it's a string here!
                 .filter(e -> !e.isInactiveState())
                 .forEach(e -> deleteEnrollment(e));
     }

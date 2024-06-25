@@ -463,7 +463,7 @@ public class ManualTest {
         // testing add/remove
         connector.updateDelta(OBJECT_CLASS_USER, testUserUid, Set.of(
                         AttributeDeltaBuilder.build(STUDENT_COURSE_IDS,
-                                otherHalfCourseIds, List.of(testCourseIdString)),
+                                otherHalfCourseIds, halfCourseIds),
                         AttributeDeltaBuilder.build(TEACHER_COURSE_IDS,
                                 halfCourseIds, null)),
                 null);
@@ -483,6 +483,18 @@ public class ManualTest {
         assertStudentCourseIds(modifiedUser, allCourseIds);
         assertTeacherCourseIds(modifiedUser, halfCourseIds); // nothing changes here
         addFinalLog("testAssignCourses - add/remove delta 2: " + prettyString(modifiedUser));
+
+        // testing add/remove 3 (removing all current courses)
+        connector.updateDelta(OBJECT_CLASS_USER, testUserUid, Set.of(
+                        AttributeDeltaBuilder.build(STUDENT_COURSE_IDS,
+                                null, allCourseIds),
+                        AttributeDeltaBuilder.build(TEACHER_COURSE_IDS,
+                                null, halfCourseIds)),
+                null);
+        modifiedUser = connector.getObject(OBJECT_CLASS_USER, testUserUid, null);
+        assertStudentCourseIds(modifiedUser, List.of());
+        assertTeacherCourseIds(modifiedUser, List.of());
+        addFinalLog("testAssignCourses - add/remove delta 3: " + prettyString(modifiedUser));
     }
 
     private static void test30DeleteUser(ConnectorFacade connector) {
@@ -538,17 +550,18 @@ public class ManualTest {
     }
 
     private static void assertEnrolledUserIds(ConnectorObject modifiedCourse, String attrName, List<String> ids) {
-        Attribute studentIdsAttr = modifiedCourse.getAttributeByName(attrName);
+        Attribute idsAttr = modifiedCourse.getAttributeByName(attrName);
         if (ids == null || ids.isEmpty()) {
-            assertThat(studentIdsAttr == null
-                    || studentIdsAttr.getValue() == null
-                    || studentIdsAttr.getValue().isEmpty())
+            assertThat(idsAttr == null
+                    || idsAttr.getValue() == null
+                    || idsAttr.getValue().isEmpty())
+                    .withFailMessage("List of IDs for " + attrName + " should be empty/null, but contains: " + idsAttr.getValue())
                     .isTrue();
             return;
         }
 
-        assertThat(studentIdsAttr).isNotNull();
-        assertThat(studentIdsAttr.getValue()).containsExactlyInAnyOrderElementsOf(ids);
+        assertThat(idsAttr).isNotNull();
+        assertThat(idsAttr.getValue()).containsExactlyInAnyOrderElementsOf(ids);
     }
 
     /** Returns UID for another test user - this one is left on the system and reused, or created the first time. */
