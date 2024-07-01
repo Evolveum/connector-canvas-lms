@@ -109,6 +109,7 @@ public class ManualTest {
         config.setAccountId(Integer.parseInt(args[2]));
         config.setStudentRoleId(Integer.parseInt(args[3]));
         config.setTeacherRoleId(Integer.parseInt(args[4]));
+        config.setSendEnrollmentNotification(true);
 
         ConnectorFacadeFactory factory = ConnectorFacadeFactory.getInstance();
         APIConfiguration impl = TestHelpers.createTestConfiguration(CanvasConnector.class, config);

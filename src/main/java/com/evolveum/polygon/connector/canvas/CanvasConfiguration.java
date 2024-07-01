@@ -26,6 +26,7 @@ public class CanvasConfiguration extends AbstractConfiguration {
     private int accountId;
     private int studentRoleId;
     private int teacherRoleId;
+    private boolean sendEnrollmentNotification;
 
     @ConfigurationProperty(
             required = true,
@@ -91,6 +92,27 @@ public class CanvasConfiguration extends AbstractConfiguration {
 
     public void setTeacherRoleId(int teacherRoleId) {
         this.teacherRoleId = teacherRoleId;
+    }
+
+    /**
+     * Controls the content of {@code enrollment[notify]} in the REST call for enrollment creation.
+     * See <a href="https://canvas.instructure.com/doc/api/enrollments.html">REST docs</a> for more.
+     * <p/>
+     * The notification only works for the first-time creation, not for the re-activation,
+     * so if the user is enrolled, then the enrollment is concluded or deactivated, there will be
+     * no notification when the user is enrolled to the same course again (with the same role ID).
+     */
+    @ConfigurationProperty(
+            required = false,
+            displayMessageKey = "canvas.config.sendEnrollmentNotification",
+            helpMessageKey = "canvas.config.sendEnrollmentNotification.help",
+            order = 60)
+    public boolean isSendEnrollmentNotification() {
+        return sendEnrollmentNotification;
+    }
+
+    public void setSendEnrollmentNotification(boolean sendEnrollmentNotification) {
+        this.sendEnrollmentNotification = sendEnrollmentNotification;
     }
 
     @Override

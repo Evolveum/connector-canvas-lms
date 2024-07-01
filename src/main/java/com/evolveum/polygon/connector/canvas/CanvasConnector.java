@@ -986,7 +986,8 @@ public class CanvasConnector implements Connector, TestOp, SchemaOp, SearchOp<Ca
         json.put("enrollment", Map.of(
                 "user_id", Integer.valueOf(userId),
                 "role_id", roleId,
-                "enrollment_state", CREATED_ENROLLMENT_STATE));
+                "enrollment_state", CREATED_ENROLLMENT_STATE,
+                "notify", configuration.isSendEnrollmentNotification()));
         canvasClient.postJson(API_COURSES_DETAILS + courseId + "/enrollments", json.toString());
     }
 
