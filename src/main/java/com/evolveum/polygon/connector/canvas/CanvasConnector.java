@@ -368,6 +368,7 @@ public class CanvasConnector implements Connector, TestOp, SchemaOp, SearchOp<Ca
                         .build())
                 .addAttributeInfo(AttributeInfoBuilder.build(Name.NAME, String.class, NOT_UPDATABLE_AND_NOT_CREATABLE))
                 .addAttributeInfo(AttributeInfoBuilder.build(COURSE_CODE, String.class, NOT_UPDATABLE_AND_NOT_CREATABLE))
+                .addAttributeInfo(AttributeInfoBuilder.build(WORKFLOW_STATE, String.class, NOT_UPDATABLE_AND_NOT_CREATABLE))
                 .addAttributeInfo(AttributeInfoBuilder.build(COURSE_UUID, String.class, NOT_UPDATABLE_AND_NOT_CREATABLE))
                 .addAttributeInfo(AttributeInfoBuilder.build(COURSE_START_AT, String.class, NOT_UPDATABLE_AND_NOT_CREATABLE))
                 .addAttributeInfo(AttributeInfoBuilder.build(COURSE_END_AT, String.class, NOT_UPDATABLE_AND_NOT_CREATABLE))
@@ -436,6 +437,7 @@ public class CanvasConnector implements Connector, TestOp, SchemaOp, SearchOp<Ca
         builder.setUid(new Uid(String.valueOf(courseId)));
         builder.setName(new Name(json.getString(COURSE_NAME)));
         builder.addAttribute(COURSE_CODE, json.getString(COURSE_CODE));
+        builder.addAttribute(WORKFLOW_STATE, json.optString(WORKFLOW_STATE));
         builder.addAttribute(COURSE_UUID, json.getString(COURSE_UUID));
         builder.addAttribute(COURSE_START_AT, json.optString(COURSE_START_AT));
         builder.addAttribute(COURSE_END_AT, json.optString(COURSE_END_AT));
