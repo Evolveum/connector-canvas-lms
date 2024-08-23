@@ -90,6 +90,16 @@ public class CanvasClient {
         return responseHandlers;
     }
 
+    /**
+     * Page attribute can contain a number, or "bookmark:<url-friendly-base64>".
+     * The bookmark is produced by <a href="https://github.com/instructure/canvas-lms/blob/master/gems/bookmarked_collection/lib/bookmarked_collection/collection.rb#L81">this code</a>
+     * which uses <a href="https://github.com/instructure/canvas-lms/blob/master/gems/json_token/lib/json_token.rb#L27">this method</a>.
+     * This creates "URL-friendly" Base64 (using - and _ instead of + and /) without padding (=).
+     */
+    private static final Pattern PAGE_PATTERN = Pattern.compile(".*[^_]page=([0-9A-Za-z:_-]+).*");
+
+    private static final Pattern PER_PAGE_PATTERN = Pattern.compile(".*per_page=(\\d+).*");
+
     private CanvasResponse callRequest(HttpRequestBase request, ResponseHandler[] responseHandlers) {
         LOG.ok("request {0}: {1}", request.getMethod(), request.getURI());
 
@@ -115,8 +125,13 @@ public class CanvasClient {
                             // The header element looks like this: <https://learning.k8s.evolveum.com/api/v1/accounts/1/users?page=3&per_page=100>; rel=next
                             // Using toString() and extracting the info from there is the easiest way.
                             String headerElementString = e.toString();
-                            canvasResponse.nextPage = matchAndGet(headerElementString, PAGE_PATTERN);
-                            canvasResponse.pageSize = matchAndGet(headerElementString, PER_PAGE_PATTERN);
+                            String nextPage = matchAndGet(headerElementString, PAGE_PATTERN);
+                            if (nextPage != null) {
+                                canvasResponse.nextPage = nextPage;
+                                canvasResponse.pageSize = matchAndGet(headerElementString, PER_PAGE_PATTERN);
+                            } else {
+                                LOG.warn("Canvas pagination issue: Found 'next' page link, but did not recognize the 'page' value. Original link: {0}", headerElementString);
+                            }
                         }
                     });
 
@@ -137,10 +152,6 @@ public class CanvasClient {
                             + response.request + "\nResponse BODY:\n" + response.bodyPreview(500));
         }
     }
-
-    private static final Pattern PAGE_PATTERN = Pattern.compile(".*[^_]page=(\\d+).*");
-
-    private static final Pattern PER_PAGE_PATTERN = Pattern.compile(".*per_page=(\\d+).*");
 
     private String matchAndGet(String input, Pattern pattern) {
         Matcher matcher = pattern.matcher(input);
