@@ -40,6 +40,8 @@ public class CanvasClient {
         apiBaseUrl = configuration.getBaseUrl() + API_BASE;
 
         HttpClientBuilder httpClientBuilder = HttpClientBuilder.create();
+        // For optional proxy support via -D properties
+        httpClientBuilder.useSystemProperties();
 
         StringBuilder token = new StringBuilder();
         if (configuration.getAuthToken() != null) {
